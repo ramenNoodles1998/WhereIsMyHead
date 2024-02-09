@@ -10,7 +10,8 @@ int main();
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow* window);
-//void mouse_callback(GLFWwindow* window, double xpos, double ypos);
+void go3dMode(glm::mat4* model, glm::mat4* projection, glm::mat4* view, Shader* shader, unsigned int* VAO);
+void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
@@ -25,6 +26,10 @@ glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
 glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 
 const float FOV = 45.0f;
+
+float lastX = 800.0 / 2, lastY = 600.0 / 2;
+bool firstMouse = true;
+
 
 float floorVertices[] = {
 	-0.5f, -0.5f, -0.5f,
@@ -88,13 +93,14 @@ int main() {
 	glfwMakeContextCurrent(window);
 	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
-	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
-	{
+	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) { 
 		printf("GLAD IS SAD\n");
 		return -1;
 	}
 
 	glEnable(GL_DEPTH_TEST);
+	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	glfwSetCursorPosCallback(window, mouse_callback);
 
 	Shader floorShader("vFloorShader.txt", "fFloorShader.txt");
 
@@ -110,8 +116,7 @@ int main() {
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
 	glEnableVertexAttribArray(0);
 
-	while (!glfwWindowShouldClose(window))
-	{
+	while (!glfwWindowShouldClose(window)) {
 
 		float currentFrame = static_cast<float>(glfwGetTime());
 		deltaTime = currentFrame - lastFrame;
@@ -128,17 +133,8 @@ int main() {
 		glm::mat4 view = glm::mat4(1.0f);
 		glm::mat4 projection = glm::mat4(1.0f);
 
-		model = glm::rotate(model, (float)glfwGetTime(), glm::vec3(0.5f, 1.0f, 0.0f));
-		view = camera.GetViewMatrix();
-		projection = glm::perspective(glm::radians(FOV), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
-
-		floorShader.setMat4("model", model);
-		floorShader.setMat4("projection", projection);
-		floorShader.setMat4("view", view);
-
-		glBindVertexArray(VAO);
-		glDrawArrays(GL_TRIANGLES, 0, 36);
-
+		go3dMode(&model, &view, &projection, &floorShader, &VAO);
+		
 		glfwSwapBuffers(window);
 		glfwPollEvents();
 	}
@@ -149,8 +145,7 @@ int main() {
 	return 0;
 }
 
-void processInput(GLFWwindow* window)
-{
+void processInput(GLFWwindow* window) {
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 		glfwSetWindowShouldClose(window, true);
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
@@ -163,8 +158,41 @@ void processInput(GLFWwindow* window)
 		camera.ProcessKeyboard(RIGHT, deltaTime);
 }
 
-
-void framebuffer_size_callback(GLFWwindow* window, int width, int height)
-{
+void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
 	glViewport(0, 0, width, height);
+}
+
+void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
+{
+	float xpos = static_cast<float>(xposIn);
+	float ypos = static_cast<float>(yposIn);
+
+	if (firstMouse)
+	{
+		lastX = xpos;
+		lastY = ypos;
+		firstMouse = false;
+	}
+
+	float xoffset = xpos - lastX;
+	float yoffset = lastY - ypos;
+
+	lastX = xpos;
+	lastY = ypos;
+
+	camera.ProcessMouseMovement(xoffset, yoffset, true);
+}
+
+void go3dMode(glm::mat4* model, glm::mat4* view, glm::mat4* projection, Shader* shader, unsigned int* VAO) {
+		*model = glm::rotate(*model, (float)glfwGetTime(), glm::vec3(0.5f, 1.0f, 0.0f));
+		*view = camera.GetViewMatrix();
+		*projection = glm::perspective(glm::radians(FOV), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
+
+		shader->setMat4("model", *model);
+		shader->setMat4("projection", *projection);
+		shader->setMat4("view", *view);
+
+		glBindVertexArray(*VAO);
+		glDrawArrays(GL_TRIANGLES, 0, 36);
+
 }
