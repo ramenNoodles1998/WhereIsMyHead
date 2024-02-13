@@ -22,19 +22,22 @@ void goMapEditor(glm::mat4* model, glm::mat4* view, glm::mat4* projection, Shade
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
+const float FOV = 45.0f;
+const int GRID_SIZE = 30;
+
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
 Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
 glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
 glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
-glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
+glm::vec3 cameraUp = glm::vec3(0.0f, -1.0f, 0.0f);
 
-const float FOV = 45.0f;
 
 float lastX = 800.0 / 2, lastY = 600.0 / 2;
 double xMousePos, yMousePos;
 double xMousePosClick, yMousePosClick;
+
 
 class state {
 public:
@@ -44,22 +47,19 @@ public:
 	bool switchMode = false;
 } state;
 
-class triangle {
-public:
-	glm::vec3 pointOne;
-	glm::vec3 pointTwo;
-	glm::vec3 pointThree;
-} triangleSet;
-
 class buildingModeState {
 public:
 	glm::vec2 dots = glm::vec2(INT_MAX, INT_MAX);
 	std::vector<glm::vec4> lines;
-	std::vector<triangle> triangles;
-	int clickCount = 0;
 } buildingModeState;
 
+class threeDState {
+public:
+	std::vector<glm::vec4> walls;
+} threeDState;
 
+float* environmentVertices = (float*)malloc(18 * sizeof(float));
+bool environmentVerticesSet = false;
 
 int main() {
 	glfwInit();
@@ -98,7 +98,6 @@ int main() {
 	glBindVertexArray(VAO);
 
 	glBindBuffer(GL_ARRAY_BUFFER, VBO);
-	//glBufferData(GL_ARRAY_BUFFER, sizeof(floorVertices), floorVertices, GL_STATIC_DRAW);
 
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
 	glEnableVertexAttribArray(0);
@@ -139,6 +138,7 @@ int main() {
 	glDeleteVertexArrays(1, &VAO);
 	glDeleteBuffers(1, &VBO);
 	glfwTerminate();
+	free(environmentVertices);
 
 	return 0;
 }
@@ -167,37 +167,63 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 
 	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
 	{
-		if (state.drawingLine) {
-			buildingModeState.lines.push_back(glm::vec4(buildingModeState.dots, xMousePos, yMousePos));
+		if (state.drawingLine && state.switchMode) {
+			glm::vec4 positionVector = glm::vec4(buildingModeState.dots, xMousePos, yMousePos);
+			buildingModeState.lines.push_back(positionVector);
 			state.drawingLine = false;
+			glm::vec4 nPositionVector = glm::vec4(
+				(SCR_WIDTH - buildingModeState.dots.x) / GRID_SIZE,
+				(SCR_HEIGHT - buildingModeState.dots.y) / GRID_SIZE,
+				(SCR_WIDTH - xMousePos) / GRID_SIZE,
+				(SCR_HEIGHT - yMousePos) / GRID_SIZE
+			);
+
+			threeDState.walls.push_back(nPositionVector);
+			printf("finished line x: %f, z: %f, x: %f, z: %f \n", buildingModeState.dots.x, buildingModeState.dots.y, xMousePos, yMousePos);
+			//create array for each wall
+			//then loop trhough and create mega vertices.
+			int oldWallSize = threeDState.walls.size() - 1;
+			if (environmentVerticesSet) {
+				float* newEnvironmentVertices = (float*)malloc(18 * sizeof(float) * oldWallSize);
+				memcpy(&newEnvironmentVertices[0], &environmentVertices[0], sizeof(float) * 18 * oldWallSize);
+				free(environmentVertices);
+				environmentVertices = (float *)malloc(sizeof(float) * 18 * threeDState.walls.size());
+				memcpy(&environmentVertices[0], &newEnvironmentVertices[0], 18 * sizeof(float) * oldWallSize);
+				free(newEnvironmentVertices);
+			}
+			else {
+				environmentVerticesSet = true;
+			}
+			//float floorVertices[] = {
+		//	-0.5f, -0.5f, 0.0f,
+		//	 0.5f, -0.5f, 0.0f,
+		//	 0.0f,  0.5f, 0.0f
+		//};
+			//copy new environment into old
+			float wallVertices[] = {
+				nPositionVector.z, 0.0f, nPositionVector.w,
+				nPositionVector.x, 0.0f, nPositionVector.y,
+				 nPositionVector.x,  1.5f, nPositionVector.y,
+
+				 nPositionVector.z, 1.5f, nPositionVector.w,
+				 nPositionVector.z, 0.0f, nPositionVector.w,
+				 nPositionVector.x,  1.5f, nPositionVector.y,
+			};
+
+			memcpy(&environmentVertices[18 * oldWallSize], wallVertices, sizeof(wallVertices));
+
+			/*for (int i = 0; i < 18 * threeDState.walls.size(); i++)
+				printf("%f element =%f", i, environmentVertices[i]);*/
+
+			glBufferData(GL_ARRAY_BUFFER, 18.0f * sizeof(float) * threeDState.walls.size(), environmentVertices, GL_STATIC_DRAW);
+
 		}
-		else {
-			buildingModeState.clickCount++;
+		else if (state.switchMode) {
 			state.drawingLine = true;
 		}
 
 		xMousePosClick = xMousePos;
 		yMousePosClick = yMousePos;
-		printf("%i", buildingModeState.clickCount);
-
-		if (buildingModeState.clickCount == 1) triangleSet.pointOne = glm::normalize(glm::vec3((float)xMousePosClick, (float)yMousePosClick, 0.0f));
-		if (buildingModeState.clickCount == 2) triangleSet.pointTwo = glm::normalize(glm::vec3((float)xMousePosClick, (float)yMousePosClick, 0.0f));
-		if (buildingModeState.clickCount == 3) {
-			triangleSet.pointThree = glm::normalize(glm::vec3((float)xMousePosClick, (float)yMousePosClick, 0.0f));
-			buildingModeState.triangles.push_back(triangleSet);
-			buildingModeState.clickCount = 0;
-			//float floorVertices[] = {
-			//	-0.5f, -0.5f, 0.0f,
-			//	 0.5f, -0.5f, 0.0f,
-			//	 0.0f,  0.5f, 0.0f
-			//};
-			float object[] = {
-				-triangleSet.pointOne.x, -triangleSet.pointOne.y, triangleSet.pointOne.z,
-				triangleSet.pointTwo.x, -triangleSet.pointTwo.y, triangleSet.pointTwo.z,
-				triangleSet.pointThree.x, triangleSet.pointThree.y, triangleSet.pointThree.z,
-			};
-			glBufferData(GL_ARRAY_BUFFER, sizeof(object), object, GL_STATIC_DRAW);
-		}
 
 		buildingModeState.dots = glm::vec2(xMousePosClick, yMousePosClick);
 	}
@@ -210,32 +236,29 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
 	float xpos = static_cast<float>(xposIn);
 	float ypos = static_cast<float>(yposIn);
 
-	if (state.switchMode) {
-
-		if (state.firstMouse)
-		{
-			lastX = xpos;
-			lastY = ypos;
-			state.firstMouse = false;
-		}
-
-		if (state.enter3D) {
-			lastX = xpos;
-			lastY = ypos;
-			camera.ProcessMouseMovement(0, 0, true);
-			state.enter3D = false;
-		}
-
-		float xoffset = xpos - lastX;
-		float yoffset = lastY - ypos;
+	if (state.firstMouse)
+	{
 		lastX = xpos;
 		lastY = ypos;
-		camera.ProcessMouseMovement(xoffset, yoffset, true);
+		state.firstMouse = false;
 	}
+
+	if (state.enter3D) {
+		lastX = xpos;
+		lastY = ypos;
+		camera.ProcessMouseMovement(0, 0, true);
+		state.enter3D = false;
+	}
+
+	float xoffset = xpos - lastX;
+	float yoffset = lastY - ypos;
+	lastX = xpos;
+	lastY = ypos;
+	camera.ProcessMouseMovement(xoffset, yoffset, true);
 }
 
 void go3dMode(glm::mat4* model, glm::mat4* view, glm::mat4* projection, Shader* shader, unsigned int* VAO) {
-	*model = glm::rotate(*model, (float)glfwGetTime(), glm::vec3(0.5f, 1.0f, 0.0f));
+	//*model = glm::rotate(*model, (float)glfwGetTime(), glm::vec3(0.5f, 1.0f, 0.0f));
 	*view = camera.GetViewMatrix();
 	*projection = glm::perspective(glm::radians(FOV), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
 	shader->setVec3("color", glm::vec3(1.0, .263, 0.0));
@@ -245,7 +268,8 @@ void go3dMode(glm::mat4* model, glm::mat4* view, glm::mat4* projection, Shader* 
 	shader->setMat4("view", *view);
 
 	glBindVertexArray(*VAO);
-	glDrawArrays(GL_TRIANGLES, 0, 36);
+
+	glDrawArrays(GL_TRIANGLES, 0, 6 * threeDState.walls.size());
 }
 
 void goMapEditor(glm::mat4* model, glm::mat4* view, glm::mat4* projection, Shader* shader) {
@@ -261,11 +285,11 @@ void goMapEditor(glm::mat4* model, glm::mat4* view, glm::mat4* projection, Shade
 		if (state.drawingLine) {
 			glPointSize(10.0);
 			glBegin(GL_POINTS);
-				glVertex2f(round(buildingModeState.dots.x, 30), round(SCR_HEIGHT - buildingModeState.dots.y, 30));
+				glVertex2f(round(buildingModeState.dots.x, GRID_SIZE), round(SCR_HEIGHT - buildingModeState.dots.y, GRID_SIZE));
 			glEnd();
 			glLineWidth(1.0);
 			glBegin(GL_LINE_LOOP);
-				glVertex2f(round(buildingModeState.dots.x, 30), round(SCR_HEIGHT - buildingModeState.dots.y, 30));
+				glVertex2f(round(buildingModeState.dots.x, GRID_SIZE), round(SCR_HEIGHT - buildingModeState.dots.y, GRID_SIZE));
 				glVertex2f(xMousePos, SCR_HEIGHT - yMousePos);
 			glEnd();
 		}
@@ -273,8 +297,8 @@ void goMapEditor(glm::mat4* model, glm::mat4* view, glm::mat4* projection, Shade
 		for (int i = 0; i < buildingModeState.lines.size(); i++) {
 			glLineWidth(1.0);
 			glBegin(GL_LINE_LOOP);
-				glVertex2f(round(buildingModeState.lines.at(i).x, 30), round(SCR_HEIGHT - buildingModeState.lines.at(i).y, 30));
-				glVertex2f(round(buildingModeState.lines.at(i).z, 30), round(SCR_HEIGHT - buildingModeState.lines.at(i).w, 30));
+				glVertex2f(round(buildingModeState.lines.at(i).x, GRID_SIZE), round(SCR_HEIGHT - buildingModeState.lines.at(i).y, GRID_SIZE));
+				glVertex2f(round(buildingModeState.lines.at(i).z, GRID_SIZE), round(SCR_HEIGHT - buildingModeState.lines.at(i).w, GRID_SIZE));
 			glEnd();
 		}
 	}
@@ -282,7 +306,7 @@ void goMapEditor(glm::mat4* model, glm::mat4* view, glm::mat4* projection, Shade
 	shader->setVec3("color", glm::vec3(0.0, 0.0, 0.0));
 	for (int x = 0; x < SCR_WIDTH; x++) {
 		for (int y = 0; y < SCR_HEIGHT; y++) {
-			if (x % 30 == 0 || y % 30 == 0) {
+			if (x % GRID_SIZE == 0 || y % GRID_SIZE == 0) {
 				glLineWidth(1.0);
 				glBegin(GL_LINE_LOOP);
 					glVertex2f(x, y);
