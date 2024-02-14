@@ -8,26 +8,16 @@
 #include <glm/glm.hpp>
 #include "state_models.h"
 #include "where_is_my_head.h"
+#include "map_editor.h"
 
 int main();
-
-int round(int n, int multiple);
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow* window, int* keyOneOldState);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
 
-void goMapEditor(glm::mat4* model, glm::mat4* view, glm::mat4* projection, Shader* shader);
-
 int init();
-
-const unsigned int SCR_WIDTH = 800;
-const unsigned int SCR_HEIGHT = 600;
-
-const float FOV = 45.0f;
-const int GRID_SIZE = 30;
-
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
@@ -36,13 +26,8 @@ glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
 glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
 glm::vec3 cameraUp = glm::vec3(0.0f, -1.0f, 0.0f);
 
-float lastX = 800.0 / 2, lastY = 600.0 / 2;
-double xMousePos, yMousePos;
-double xMousePosClick, yMousePosClick;
-
 float* environmentVertices = (float*)malloc(18 * sizeof(float));
 bool environmentVerticesSet = false;
-
 GLFWwindow* window;
 int main() {
 	int status = init();
@@ -68,6 +53,11 @@ int main() {
 	int oldState = GLFW_PRESS;
 	GLFWcursor* cursor = glfwCreateStandardCursor(GLFW_CURSOR);
 	
+	MapEditor mapEditor(&floorShader, &mapEditorState, &mainState);
+
+	WhereIsMyHead whereIsMyHead(&floorShader, &VAO, &camera, &gameState, &mainState);
+
+	
 	while (!glfwWindowShouldClose(window)) {
 		float currentFrame = static_cast<float>(glfwGetTime());
 		deltaTime = currentFrame - lastFrame;
@@ -80,18 +70,14 @@ int main() {
 
 		floorShader.use();
 
-		glm::mat4 model = glm::mat4(1.0f);
-		glm::mat4 view = glm::mat4(1.0f);
-		glm::mat4 projection = glm::mat4(1.0f);
 		if (!mainState.switchMode) {
 			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-			WhereIsMyHead whereIsMyHead(&model, &view, &projection, &floorShader, &VAO, camera, gameState);
 			whereIsMyHead.start();
 		}
 		else {
 			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 			glfwSetCursor(window, cursor);
-			goMapEditor(&model, &view, &projection, &floorShader);
+			mapEditor.start();
 			mainState.enter3D = true;
 		}
 		
@@ -132,18 +118,18 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
 	{
 		if (mainState.drawingLine && mainState.switchMode) {
-			glm::vec4 positionVector = glm::vec4(mapEditorState.dots, xMousePos, yMousePos);
+			glm::vec4 positionVector = glm::vec4(mapEditorState.dots, mainState.xMousePos, mainState.yMousePos);
 			mapEditorState.lines.push_back(positionVector);
 			mainState.drawingLine = false;
 			glm::vec4 nPositionVector = glm::vec4(
-				(SCR_WIDTH - mapEditorState.dots.x) / GRID_SIZE,
-				(SCR_HEIGHT - mapEditorState.dots.y) / GRID_SIZE,
-				(SCR_WIDTH - xMousePos) / GRID_SIZE,
-				(SCR_HEIGHT - yMousePos) / GRID_SIZE
+				(mainState.SCR_WIDTH - mapEditorState.dots.x) / mainState.GRID_SIZE,
+				(mainState.SCR_HEIGHT - mapEditorState.dots.y) / mainState.GRID_SIZE,
+				(mainState.SCR_WIDTH - mainState.xMousePos) / mainState.GRID_SIZE,
+				(mainState.SCR_HEIGHT - mainState.yMousePos) / mainState.GRID_SIZE
 			);
 
 			gameState.walls.push_back(nPositionVector);
-			printf("finished line x: %f, z: %f, x: %f, z: %f \n", mapEditorState.dots.x, mapEditorState.dots.y, xMousePos, yMousePos);
+			printf("finished line x: %f, z: %f, x: %f, z: %f \n", mapEditorState.dots.x, mapEditorState.dots.y, mainState.xMousePos, mainState.yMousePos);
 			//create array for each wall
 			//then loop trhough and create mega vertices.
 			int oldWallSize = gameState.walls.size() - 1;
@@ -189,102 +175,41 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 			mainState.drawingLine = true;
 		}
 
-		xMousePosClick = xMousePos;
-		yMousePosClick = yMousePos;
+		mainState.xMousePosClick = mainState.xMousePos;
+		mainState.yMousePosClick = mainState.yMousePos;
 
-		mapEditorState.dots = glm::vec2(xMousePosClick, yMousePosClick);
+		mapEditorState.dots = glm::vec2(mainState.xMousePosClick, mainState.yMousePosClick);
 	}
 }
 
 void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
 {
-	glfwGetCursorPos(window, &xMousePos, &yMousePos);
+	glfwGetCursorPos(window, &mainState.xMousePos, &mainState.yMousePos);
 	//we need to save old xposIn from switchingModes and yposIn
 	float xpos = static_cast<float>(xposIn);
 	float ypos = static_cast<float>(yposIn);
 
 	if (mainState.firstMouse)
 	{
-		lastX = xpos;
-		lastY = ypos;
+		mainState.lastX = xpos;
+		mainState.lastY = ypos;
 		mainState.firstMouse = false;
 	}
 
 	if (mainState.enter3D) {
-		lastX = xpos;
-		lastY = ypos;
+		mainState.lastX = xpos;
+		mainState.lastY = ypos;
 		camera.ProcessMouseMovement(0, 0, true);
 		mainState.enter3D = false;
 	}
 
-	float xoffset = xpos - lastX;
-	float yoffset = lastY - ypos;
-	lastX = xpos;
-	lastY = ypos;
+	float xoffset = xpos - mainState.lastX;
+	float yoffset = mainState.lastY - ypos;
+	mainState.lastX = xpos;
+	mainState.lastY = ypos;
 	camera.ProcessMouseMovement(xoffset, yoffset, true);
 }
 
-void go3dMode(glm::mat4* model, glm::mat4* view, glm::mat4* projection, Shader* shader, unsigned int* VAO) {
-	//*model = glm::rotate(*model, (float)glfwGetTime(), glm::vec3(0.5f, 1.0f, 0.0f));
-}
-
-void goMapEditor(glm::mat4* model, glm::mat4* view, glm::mat4* projection, Shader* shader) {
-	*projection = glm::ortho(0.0, (double)SCR_WIDTH, 0.0, (double)SCR_HEIGHT, -1.0, 1.0);
-
-	shader->setMat4("model", *model);
-	shader->setMat4("projection", *projection);
-	shader->setMat4("view", *view);
-
-	if (mapEditorState.dots.x != INT_MAX && mapEditorState.dots.y != INT_MAX) {
-		shader->setVec3("color", glm::vec3(1.0, .263, 0.0));
-		
-		if (mainState.drawingLine) {
-			glPointSize(10.0);
-			glBegin(GL_POINTS);
-				glVertex2f(round(mapEditorState.dots.x, GRID_SIZE), round(SCR_HEIGHT - mapEditorState.dots.y, GRID_SIZE));
-			glEnd();
-			glLineWidth(1.0);
-			glBegin(GL_LINE_LOOP);
-				glVertex2f(round(mapEditorState.dots.x, GRID_SIZE), round(SCR_HEIGHT - mapEditorState.dots.y, GRID_SIZE));
-				glVertex2f(xMousePos, SCR_HEIGHT - yMousePos);
-			glEnd();
-		}
-
-		for (int i = 0; i < mapEditorState.lines.size(); i++) {
-			glLineWidth(1.0);
-			glBegin(GL_LINE_LOOP);
-				glVertex2f(round(mapEditorState.lines.at(i).x, GRID_SIZE), round(SCR_HEIGHT - mapEditorState.lines.at(i).y, GRID_SIZE));
-				glVertex2f(round(mapEditorState.lines.at(i).z, GRID_SIZE), round(SCR_HEIGHT - mapEditorState.lines.at(i).w, GRID_SIZE));
-			glEnd();
-		}
-	}
-
-	shader->setVec3("color", glm::vec3(0.0, 0.0, 0.0));
-	for (int x = 0; x < SCR_WIDTH; x++) {
-		for (int y = 0; y < SCR_HEIGHT; y++) {
-			if (x % GRID_SIZE == 0 || y % GRID_SIZE == 0) {
-				glLineWidth(1.0);
-				glBegin(GL_LINE_LOOP);
-					glVertex2f(x, y);
-					glVertex2f(x + 1, y + 1);
-				glEnd();
-			}
-		}
-	}
-}
-
-
-int round(int n, int multiple)
-{
-	// Smaller multiple 
-	int a = (n / multiple) * multiple;
-
-	// Larger multiple 
-	int b = a + multiple;
-
-	// Return of closest of two 
-	return (n - a > b - n) ? b : a;
-}
 
 int init() {
 	glfwInit();
@@ -292,7 +217,7 @@ int init() {
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-	window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Where is my head", NULL, NULL);
+	window = glfwCreateWindow(mainState.SCR_WIDTH, mainState.SCR_HEIGHT, "Where is my head", NULL, NULL);
 
 	if (window == NULL)
 	{

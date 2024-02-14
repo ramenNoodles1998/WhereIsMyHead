@@ -13,40 +13,34 @@
 
 class WhereIsMyHead
 {
-	const unsigned int SCR_WIDTH = 800;
-	const unsigned int SCR_HEIGHT = 600;
-	const float FOV = 45.0f;
 public:
-	glm::mat4* model;
-	glm::mat4* view;
-	glm::mat4* projection;
 	Shader* shader;
 	unsigned int* VAO;
-	Camera camera;
-	GameState gameState;
+	Camera* camera;
+	GameState* gameState;
+	MainState* mainState;
 
-	WhereIsMyHead(glm::mat4* model, glm::mat4* view, glm::mat4* projection, Shader* shader, unsigned int* VAO, Camera camera, GameState gameState) {
-		this->model = model;
-		this->view = view;
-		this->projection = projection;
+	WhereIsMyHead(Shader* shader, unsigned int* VAO, Camera* camera, GameState* gameState, MainState* mainState) {
 		this->shader = shader;
 		this->VAO = VAO;
 		this->camera = camera;
 		this->gameState = gameState;
+		this->mainState = mainState;
 	}
 
 	void start() {
-		*view = camera.GetViewMatrix();
-		*projection = glm::perspective(glm::radians(FOV), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
+		glm::mat4 view = camera->GetViewMatrix();
+		glm::mat4 projection = glm::perspective(glm::radians(mainState->FOV), (float)mainState->SCR_WIDTH / (float)mainState->SCR_HEIGHT, 0.1f, 100.0f);
+		glm::mat4 model = glm::mat4(1.0f);
 		shader->setVec3("color", glm::vec3(1.0, .263, 0.0));
 
-		shader->setMat4("model", *model);
-		shader->setMat4("projection", *projection);
-		shader->setMat4("view", *view);
+		shader->setMat4("model", model);
+		shader->setMat4("projection", projection);
+		shader->setMat4("view", view);
 
 		glBindVertexArray(*VAO);
 
-		glDrawArrays(GL_TRIANGLES, 0, 6 * gameState.walls.size());
+		glDrawArrays(GL_TRIANGLES, 0, 6 * gameState->walls.size());
 	}
 };
 
