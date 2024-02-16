@@ -29,6 +29,8 @@ glm::vec3 cameraUp = glm::vec3(0.0f, -1.0f, 0.0f);
 float* environmentVertices = (float*)malloc(18 * sizeof(float));
 bool environmentVerticesSet = false;
 GLFWwindow* window;
+
+MapEditorState mapEditorState;
 int main() {
 	int status = init();
 	if (status < 0) {
@@ -36,7 +38,8 @@ int main() {
 		return -1;
 	}
 
-	Shader floorShader("vFloorShader.txt", "fFloorShader.txt");
+	Shader gameShader("vGameShader.txt", "fGameShader.txt");
+	Shader mapEditorShader("vMapEditorShader.txt", "fMapEditorShader.txt");
 
 	unsigned int VAO, VBO;
 	glGenVertexArrays(1, &VAO);
@@ -53,9 +56,9 @@ int main() {
 	int oldState = GLFW_PRESS;
 	GLFWcursor* cursor = glfwCreateStandardCursor(GLFW_CURSOR);
 	
-	MapEditor mapEditor(&floorShader, &mapEditorState, &mainState);
+	MapEditor mapEditor(&gameShader, &mapEditorState, &mainState);
 
-	WhereIsMyHead whereIsMyHead(&floorShader, &VAO, &camera, &gameState, &mainState);
+	WhereIsMyHead whereIsMyHead(&gameShader, &VAO, &camera, &gameState, &mainState);
 
 	
 	while (!glfwWindowShouldClose(window)) {
@@ -65,16 +68,18 @@ int main() {
 
 		processInput(window, &oldState);
 
-		glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // also clear the depth buffer now!
+		glClearColor(0.15f, 0.15f, 0.15f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); 
 
-		floorShader.use();
+
 
 		if (!mainState.switchMode) {
+			gameShader.use();
 			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 			whereIsMyHead.start();
 		}
 		else {
+			mapEditorShader.use();
 			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 			glfwSetCursor(window, cursor);
 			mapEditor.start();
@@ -117,19 +122,49 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 
 	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
 	{
+
+
+		mainState.xMousePosClick = mainState.xMousePos;
+		mainState.yMousePosClick = mainState.yMousePos;
+		printf("%f, %f \n", mainState.xMousePos, mainState.yMousePos);
+		int x = mainState.SCR_WIDTH / 2;
+		int y = mainState.SCR_HEIGHT / 2;
+		int relativeMousePointX;
+		int relativeMousePointY;
+
+
+		if (mainState.xMousePos >= x) {
+			relativeMousePointX = (int)(mainState.xMousePos + 5) - x;
+			relativeMousePointX = relativeMousePointX / mainState.GRID_SIZE;
+		}
+		else {
+			relativeMousePointX = (int)(mainState.xMousePos - 5) - x;
+			relativeMousePointX = relativeMousePointX / mainState.GRID_SIZE;
+		}
+
+		if (mainState.yMousePos >= y) {
+			relativeMousePointY = (int)(mainState.yMousePos + 5) - y;
+			relativeMousePointY = -relativeMousePointY / mainState.GRID_SIZE;
+		}
+		else {
+			relativeMousePointY = (int)(mainState.yMousePos - 5) - y;
+			relativeMousePointY = -relativeMousePointY / mainState.GRID_SIZE;
+		}
+
+		printf("%i, %i\n", relativeMousePointX, relativeMousePointY);
 		if (mainState.drawingLine && mainState.switchMode) {
 			glm::vec4 positionVector = glm::vec4(mapEditorState.dots, mainState.xMousePos, mainState.yMousePos);
 			mapEditorState.lines.push_back(positionVector);
 			mainState.drawingLine = false;
+
 			glm::vec4 nPositionVector = glm::vec4(
-				(mainState.SCR_WIDTH - mapEditorState.dots.x) / mainState.GRID_SIZE,
-				(mainState.SCR_HEIGHT - mapEditorState.dots.y) / mainState.GRID_SIZE,
-				(mainState.SCR_WIDTH - mainState.xMousePos) / mainState.GRID_SIZE,
-				(mainState.SCR_HEIGHT - mainState.yMousePos) / mainState.GRID_SIZE
+				mapEditorState.dots.x,
+				mapEditorState.dots.y,
+				relativeMousePointX,
+				relativeMousePointY
 			);
 
 			gameState.walls.push_back(nPositionVector);
-			printf("finished line x: %f, z: %f, x: %f, z: %f \n", mapEditorState.dots.x, mapEditorState.dots.y, mainState.xMousePos, mainState.yMousePos);
 			//create array for each wall
 			//then loop trhough and create mega vertices.
 			int oldWallSize = gameState.walls.size() - 1;
@@ -149,10 +184,8 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 		//	 0.5f, -0.5f, 0.0f,
 		//	 0.0f,  0.5f, 0.0f
 		//};
-			//tinker with this til it makes sense more.
-			//think needs to take into account direction drawn.
-			//maybe try relative mouse positions, and redo saving points.
-			//seperate out 3d mode and build mode 
+			//
+			//this seems broken
 			float wallVertices[] = {
 				nPositionVector.z, 0.0f, nPositionVector.w,
 				nPositionVector.x, 0.0f, nPositionVector.y,
@@ -175,10 +208,9 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 			mainState.drawingLine = true;
 		}
 
-		mainState.xMousePosClick = mainState.xMousePos;
-		mainState.yMousePosClick = mainState.yMousePos;
+		Position position(relativeMousePointX, relativeMousePointY);
 
-		mapEditorState.dots = glm::vec2(mainState.xMousePosClick, mainState.yMousePosClick);
+		mapEditorState.dots = position;
 	}
 }
 

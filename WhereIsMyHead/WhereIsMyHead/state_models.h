@@ -2,6 +2,27 @@
 #include <vector>
 #include <glm/glm.hpp>
 
+class Position {
+public:
+	int x;
+	int y;
+
+	Position() {
+		x = INT_MAX;
+		y = INT_MAX;
+	}
+
+	Position(int x, int y) {
+		this->x = x;
+		this->y = y;
+	}
+};
+
+struct Line {
+	Position position;
+	Position secondPosition;
+};
+
 struct MainState {
 	bool firstMouse = true;
 	bool enter3D = false;
@@ -15,13 +36,23 @@ struct MainState {
 	const unsigned int SCR_WIDTH = 800;
 	const unsigned int SCR_HEIGHT = 600;
 	const float FOV = 45.0f;
-	const int GRID_SIZE = 30;
+	const int GRID_SIZE = 100;
 } mainState;
 
-struct MapEditorState {
-	glm::vec2 dots = glm::vec2(INT_MAX, INT_MAX);
-	std::vector<glm::vec4> lines;
-} mapEditorState;
+class MapEditorState {
+public:
+	Position dots;
+	std::vector<Line> lines;
+
+	MapEditorState() {
+		Position p;
+		dots = p;
+	}
+
+	MapEditorState(Position dots) {
+		this->dots = dots;
+	}
+};
 
 struct GameState {
 	std::vector<glm::vec4> walls;

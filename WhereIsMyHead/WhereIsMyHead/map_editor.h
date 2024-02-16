@@ -32,8 +32,7 @@ public:
 		shader->setMat4("view", view);
 
 		if (mapEditorState->dots.x != INT_MAX && mapEditorState->dots.y != INT_MAX) {
-			shader->setVec3("color", glm::vec3(1.0, .263, 0.0));
-			
+			shader->setVec3("color", glm::vec3(0.45f, 0.7f, 0.4f));
 			if (mainState->drawingLine) {
 				glPointSize(10.0);
 				glBegin(GL_POINTS);
@@ -47,7 +46,7 @@ public:
 			}
 
 			for (int i = 0; i < mapEditorState->lines.size(); i++) {
-				glLineWidth(1.0);
+				glLineWidth(5.0);
 				glBegin(GL_LINE_LOOP);
 					glVertex2f(round(mapEditorState->lines.at(i).x, mainState->GRID_SIZE), round(mainState->SCR_HEIGHT - mapEditorState->lines.at(i).y, mainState->GRID_SIZE));
 					glVertex2f(round(mapEditorState->lines.at(i).z, mainState->GRID_SIZE), round(mainState->SCR_HEIGHT - mapEditorState->lines.at(i).w, mainState->GRID_SIZE));
@@ -55,7 +54,7 @@ public:
 			}
 		}
 
-		shader->setVec3("color", glm::vec3(0.0, 0.0, 0.0));
+		shader->setVec3("color", glm::vec3(1.0, 1.0, 1.0));
 		for (int x = 0; x < mainState->SCR_WIDTH; x++) {
 			for (int y = 0; y < mainState->SCR_HEIGHT; y++) {
 				if (x % mainState->GRID_SIZE == 0 || y % mainState->GRID_SIZE == 0) {
